@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/**
+ * @title SimpleMarketplace
+ * @dev A minimal decentralized marketplace with core functionality
+ */
+contract SimpleMarketplace {
+    // State variables
+    address public owner;
+    uint256 public itemCount = 0;
+    
+    // Item struct
+    struct Item {
+        uint256 id;
+        string name;
+        string description;
+        uint256 price;
+        address payable seller;
+        bool active;
+    }
+    
+    // Mapping from item ID to Item
+    mapping(uint256 => Item) public items;
+    
+    // Events
+    event ItemListed(uint256 indexed itemId, string name, uint256 price, address indexed seller);
+    event ItemPurchased(uint256 indexed itemId, address indexed buyer, uint256 price);
+    
+    // Constructor
+    constructor() {
+        owner = msg.sender;
+    }
+
+    /**
+     * @dev List a new item for sale
+     * @param _name Name of the item
+     * @param _description Description of the item
+     * @param _price Price in wei
+     * @return Item ID of the newly listed item
+     */
+    function listItem(string memory _name, string memory _description, uint256 _price) public returns (uint256) {
+        require(bytes(_name).length > 0, "Name cannot be empty");
+        require(_price > 0, "Price must be greater than 0");
+        
+        itemCount++;
+        items[itemCount] = Item({
+            id: itemCount,
+            name: _name,
+            description: _description,
+            price: _price,
+            seller: payable(msg.sender),
+            active: true
+        });
+        
+        emit ItemListed(itemCount, _name, _price, msg.sender);
+        return itemCount;
+    }
+    
+    /**
+     * @dev Purchase an item
+     * @param _itemId ID of the item to purchase
+     */
+    function purchaseItem(uint256 _itemId) public payable {
+        require(_itemId > 0 && _itemId <= itemCount, "Item does not exist");
+        
+        Item storage item = items[_itemId];
+        require(item.active, "Item is not active");
+        require(msg.sender != item.seller, "Seller cannot buy their own item");
+        require(msg.value >= item.price, "Insufficient payment");
+        
+        // Mark item as inactive (sold)
+        item.active = false;
+        
+        // Transfer the funds to the seller
+        item.seller.transfer(item.price);
+        
+        // Refund excess payment if any
+        if (msg.value > item.price) {
+            payable(msg.sender).transfer(msg.value - item.price);
+        }
+        
+        emit ItemPurchased(_itemId, msg.sender, item.price);
+    }
+    
+    /**
+     * @dev Get all available items
+     * @return Array of active item IDs
+     */
+    function getAvailableItems() public view returns (uint256[] memory) {
+        uint256 activeItemCount = 0;
+        
+        // Count active items
+        for (uint256 i = 1; i <= itemCount; i++) {
+            if (items[i].active) {
+                activeItemCount++;
+            }
+        }
+        
+        // Create result array
+        uint256[] memory result = new uint256[](activeItemCount);
+        uint256 index = 0;
+        
+        // Fill result array
+        for (uint256 i = 1; i <= itemCount; i++) {
+            if (items[i].active) {
+                result[index] = i;
+                index++;
+            }
+        }
+        
+        return result;
+    }
+}
